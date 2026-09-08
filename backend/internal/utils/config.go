@@ -37,6 +37,7 @@ type Config struct {
 	StockRequestTimeout time.Duration
 	StockQuoteCacheTTL  time.Duration
 	WatchlistLimit      int
+	AlertLimit          int
 }
 
 func LoadConfig() (Config, error) {
@@ -94,6 +95,12 @@ func LoadConfig() (Config, error) {
 	}
 	if cfg.WatchlistLimit, err = envInt("WATCHLIST_LIMIT_PER_USER", 50); err != nil {
 		return Config{}, err
+	}
+	if cfg.AlertLimit, err = envInt("ALERT_LIMIT_PER_USER", 100); err != nil {
+		return Config{}, err
+	}
+	if cfg.AlertLimit <= 0 {
+		return Config{}, fmt.Errorf("ALERT_LIMIT_PER_USER must be greater than zero")
 	}
 	if cfg.WatchlistLimit <= 0 {
 		return Config{}, fmt.Errorf("WATCHLIST_LIMIT_PER_USER must be greater than zero")

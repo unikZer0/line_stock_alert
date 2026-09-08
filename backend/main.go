@@ -76,6 +76,9 @@ func main() {
 	quoteCache := services.NewRedisQuoteCache(redisClient)
 	watchlistService := services.NewWatchlistService(watchlistRepository, stockProvider, quoteCache, cfg.WatchlistLimit, cfg.StockQuoteCacheTTL)
 	watchlistHandler := handlers.NewWatchlistHandler(watchlistService)
+	alertRepository := repositories.NewAlertRepository(db)
+	alertService := services.NewAlertService(alertRepository, stockProvider, cfg.AlertLimit)
+	alertHandler := handlers.NewAlertHandler(alertService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -103,6 +106,12 @@ func main() {
 	watchlists.GET("", watchlistHandler.List)
 	watchlists.POST("", watchlistHandler.Add)
 	watchlists.DELETE("/:id", watchlistHandler.Delete)
+
+	alerts := api.Group("/alerts", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	alerts.GET("", alertHandler.List)
+	alerts.POST("", alertHandler.Create, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
+	alerts.PATCH("/:id", alertHandler.Update)
+	alerts.DELETE("/:id", alertHandler.Delete)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

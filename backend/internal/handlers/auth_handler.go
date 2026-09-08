@@ -122,6 +122,12 @@ func handleServiceError(c echo.Context, err error) error {
 		"STOCK_PROVIDER_RATE_LIMIT":       http.StatusTooManyRequests,
 		"STOCK_PROVIDER_UNAVAILABLE":      http.StatusServiceUnavailable,
 		"STOCK_PROVIDER_TIMEOUT":          http.StatusGatewayTimeout,
+		"INVALID_FILTER":                  http.StatusUnprocessableEntity,
+		"ALERT_LIMIT_REACHED":             http.StatusForbidden,
+		"ALERT_ALREADY_EXISTS":            http.StatusConflict,
+		"ALERT_NOT_FOUND":                 http.StatusNotFound,
+		"INVALID_ALERT_CONDITION":         http.StatusUnprocessableEntity,
+		"INVALID_TARGET_PRICE":            http.StatusUnprocessableEntity,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError
