@@ -34,6 +34,14 @@ type AuthStore interface {
 	RotateRefreshToken(context.Context, string, string, string, string, time.Time, string, string) error
 	RevokeTokenFamily(context.Context, string) error
 	RevokeAllUserTokens(context.Context, string) error
+	FindOrCreateLineUser(context.Context, string, string) (models.User, error)
+}
+
+func (s *AuthService) IssueTokens(ctx context.Context, user models.User, ip, userAgent string) (models.TokenResponse, error) {
+	if user.Status == "DISABLED" {
+		return models.TokenResponse{}, newError("ACCOUNT_DISABLED", "This account is disabled.", nil)
+	}
+	return s.issueTokens(ctx, user, ip, userAgent)
 }
 
 type AuthConfig struct {

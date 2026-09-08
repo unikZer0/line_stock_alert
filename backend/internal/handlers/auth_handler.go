@@ -104,8 +104,17 @@ func handleServiceError(c echo.Context, err error) error {
 		"EMAIL_NOT_VERIFIED": http.StatusForbidden, "ACCOUNT_DISABLED": http.StatusForbidden,
 		"USER_NOT_FOUND": http.StatusNotFound, "OTP_MAX_ATTEMPTS_EXCEEDED": http.StatusTooManyRequests,
 		"OTP_RATE_LIMITED": http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED": http.StatusTooManyRequests,
-		"LOGIN_RATE_LIMITED":        http.StatusTooManyRequests,
-		"EMAIL_SERVICE_UNAVAILABLE": http.StatusServiceUnavailable,
+		"LOGIN_RATE_LIMITED":              http.StatusTooManyRequests,
+		"EMAIL_SERVICE_UNAVAILABLE":       http.StatusServiceUnavailable,
+		"INVALID_OAUTH_STATE":             http.StatusBadRequest,
+		"LINE_AUTH_CANCELLED":             http.StatusBadRequest,
+		"INVALID_OAUTH_CODE":              http.StatusBadRequest,
+		"LINE_AUTH_PROVIDER_ERROR":        http.StatusBadGateway,
+		"LINE_AUTH_PROVIDER_UNAVAILABLE":  http.StatusServiceUnavailable,
+		"USER_ALREADY_HAS_LINE":           http.StatusConflict,
+		"LINE_ALREADY_LINKED":             http.StatusConflict,
+		"CANNOT_UNLINK_ONLY_LOGIN_METHOD": http.StatusBadRequest,
+		"LINE_USER_NOT_FOUND":             http.StatusNotFound,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError

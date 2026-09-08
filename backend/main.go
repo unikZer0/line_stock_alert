@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -48,6 +49,15 @@ func main() {
 		BcryptCost: cfg.BcryptCost, OTPMaxAttempts: cfg.OTPMaxAttempts,
 	})
 	authHandler := handlers.NewAuthHandler(authService)
+	lineClient := services.NewLineClient(
+		&http.Client{Timeout: 10 * time.Second}, cfg.LineChannelID, cfg.LineChannelSecret,
+	)
+	lineService := services.NewLineOAuthService(authRepository, lineClient, authService, services.LineOAuthConfig{
+		ChannelID: cfg.LineChannelID, CallbackURL: cfg.LineCallbackURL, LinkCallbackURL: cfg.LineLinkCallbackURL,
+		StateSecret: cfg.LineStateSecret, Issuer: cfg.JWTIssuer, StateTTL: 10 * time.Minute,
+	})
+	lineHandler := handlers.NewLineOAuthHandler(lineService, cfg.FrontendURL)
+	lineAccountHandler := handlers.NewLineAccountHandler(lineService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -62,6 +72,14 @@ func main() {
 	auth.POST("/login", authHandler.Login, authmw.RateLimit(5, time.Minute, "LOGIN_RATE_LIMITED"))
 	auth.POST("/refresh", authHandler.Refresh)
 	auth.POST("/logout", authHandler.Logout, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	auth.GET("/line", lineHandler.Start, authmw.RateLimit(10, time.Minute, "RATE_LIMIT_EXCEEDED"))
+	auth.GET("/line/callback", lineHandler.Callback, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
+
+	//http://localhost:8080/api/v1/accounts/line/callback
+	accounts := api.Group("/accounts")
+	accounts.POST("/line/connect", lineAccountHandler.Connect, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	accounts.GET("/line/callback", lineAccountHandler.Callback, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
+	accounts.DELETE("/line", lineAccountHandler.Unlink, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

@@ -14,9 +14,12 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("record not found")
-	ErrEmailExists   = errors.New("email already exists")
-	ErrTokenConflict = errors.New("token already exists")
+	ErrNotFound              = errors.New("record not found")
+	ErrEmailExists           = errors.New("email already exists")
+	ErrTokenConflict         = errors.New("token already exists")
+	ErrUserAlreadyHasLine    = errors.New("user already has LINE identity")
+	ErrLineAlreadyLinked     = errors.New("LINE identity already linked")
+	ErrCannotUnlinkOnlyLogin = errors.New("cannot unlink only login method")
 )
 
 type AuthRepository struct {
@@ -237,6 +240,134 @@ func (r *AuthRepository) RevokeAllUserTokens(ctx context.Context, userID string)
 	_, err := r.db.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("revoke user tokens: %w", err)
+	}
+	return nil
+}
+
+func (r *AuthRepository) FindOrCreateLineUser(ctx context.Context, lineUserID, displayName string) (models.User, error) {
+	user, err := r.findUserByLineID(ctx, lineUserID)
+	if err == nil {
+		return user, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return models.User{}, err
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return models.User{}, fmt.Errorf("begin LINE user creation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	err = tx.QueryRow(ctx, `
+		INSERT INTO users (display_name) VALUES (NULLIF($1, ''))
+		RETURNING id::text, COALESCE(email::text, ''), COALESCE(password_hash, ''), role, status, email_verified_at
+	`, displayName).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.Status, &user.EmailVerifiedAt)
+	if err != nil {
+		return models.User{}, fmt.Errorf("insert LINE user: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO user_identities (user_id, provider, provider_user_id) VALUES ($1, 'LINE', $2)
+	`, user.ID, lineUserID); err != nil {
+		return models.User{}, fmt.Errorf("insert LINE identity: %w", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return models.User{}, fmt.Errorf("commit LINE user creation: %w", err)
+	}
+	return user, nil
+}
+
+func (r *AuthRepository) findUserByLineID(ctx context.Context, lineUserID string) (models.User, error) {
+	var user models.User
+	err := r.db.QueryRow(ctx, `
+		SELECT u.id::text, COALESCE(u.email::text, ''), COALESCE(u.password_hash, ''),
+		       u.role, u.status, u.email_verified_at
+		FROM users u JOIN user_identities ui ON ui.user_id = u.id
+		WHERE ui.provider = 'LINE' AND ui.provider_user_id = $1
+	`, lineUserID).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.Status, &user.EmailVerifiedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.User{}, ErrNotFound
+	}
+	if err != nil {
+		return models.User{}, fmt.Errorf("find LINE user: %w", err)
+	}
+	return user, nil
+}
+
+func (r *AuthRepository) UserHasLineIdentity(ctx context.Context, userID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = 'LINE')
+	`, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check LINE identity: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *AuthRepository) LinkLineIdentity(ctx context.Context, userID, lineUserID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin LINE identity link: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var userConnected, lineConnected bool
+	if err = tx.QueryRow(ctx, `
+		SELECT
+		  EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = 'LINE'),
+		  EXISTS (SELECT 1 FROM user_identities WHERE provider = 'LINE' AND provider_user_id = $2)
+	`, userID, lineUserID).Scan(&userConnected, &lineConnected); err != nil {
+		return fmt.Errorf("check LINE identity conflicts: %w", err)
+	}
+	if userConnected {
+		return ErrUserAlreadyHasLine
+	}
+	if lineConnected {
+		return ErrLineAlreadyLinked
+	}
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO user_identities (user_id, provider, provider_user_id) VALUES ($1, 'LINE', $2)
+	`, userID, lineUserID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if pgErr.ConstraintName == "user_identities_user_id_provider_key" {
+				return ErrUserAlreadyHasLine
+			}
+			return ErrLineAlreadyLinked
+		}
+		return fmt.Errorf("link LINE identity: %w", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit LINE identity link: %w", err)
+	}
+	return nil
+}
+
+func (r *AuthRepository) UnlinkLineIdentity(ctx context.Context, userID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin LINE identity unlink: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var passwordHash *string
+	var emailVerifiedAt *time.Time
+	if err = tx.QueryRow(ctx, `
+		SELECT password_hash, email_verified_at FROM users WHERE id = $1 FOR UPDATE
+	`, userID).Scan(&passwordHash, &emailVerifiedAt); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("find user for LINE unlink: %w", err)
+	}
+	if passwordHash == nil || *passwordHash == "" || emailVerifiedAt == nil {
+		return ErrCannotUnlinkOnlyLogin
+	}
+	result, err := tx.Exec(ctx, `DELETE FROM user_identities WHERE user_id = $1 AND provider = 'LINE'`, userID)
+	if err != nil {
+		return fmt.Errorf("unlink LINE identity: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit LINE identity unlink: %w", err)
 	}
 	return nil
 }
