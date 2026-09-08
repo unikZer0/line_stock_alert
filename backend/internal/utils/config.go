@@ -8,38 +8,42 @@ import (
 )
 
 type Config struct {
-	DatabaseURL         string
-	JWTAccessSecret     string
-	JWTRefreshSecret    string
-	JWTIssuer           string
-	AccessTTL           time.Duration
-	RefreshTTL          time.Duration
-	BcryptCost          int
-	OTPTTL              time.Duration
-	OTPResendCooldown   time.Duration
-	OTPMaxAttempts      int
-	SMTPHost            string
-	SMTPPort            int
-	SMTPUser            string
-	SMTPPassword        string
-	SMTPUseTLS          bool
-	FromEmail           string
-	FromName            string
-	FrontendURL         string
-	LineChannelID       string
-	LineChannelSecret   string
-	LineCallbackURL     string
-	LineLinkCallbackURL string
-	LineStateSecret     string
-	LineMessagingSecret string
-	LineMessagingToken  string
-	RedisURL            string
-	StockAPIBaseURL     string
-	StockAPIKey         string
-	StockRequestTimeout time.Duration
-	StockQuoteCacheTTL  time.Duration
-	WatchlistLimit      int
-	AlertLimit          int
+	DatabaseURL            string
+	JWTAccessSecret        string
+	JWTRefreshSecret       string
+	JWTIssuer              string
+	AccessTTL              time.Duration
+	RefreshTTL             time.Duration
+	BcryptCost             int
+	OTPTTL                 time.Duration
+	OTPResendCooldown      time.Duration
+	OTPMaxAttempts         int
+	SMTPHost               string
+	SMTPPort               int
+	SMTPUser               string
+	SMTPPassword           string
+	SMTPUseTLS             bool
+	FromEmail              string
+	FromName               string
+	FrontendURL            string
+	LineChannelID          string
+	LineChannelSecret      string
+	LineCallbackURL        string
+	LineLinkCallbackURL    string
+	LineStateSecret        string
+	LineMessagingSecret    string
+	LineMessagingToken     string
+	RedisURL               string
+	StockAPIBaseURL        string
+	StockAPIKey            string
+	StockRequestTimeout    time.Duration
+	StockQuoteCacheTTL     time.Duration
+	WatchlistLimit         int
+	AlertLimit             int
+	AlertWorkerEnabled     bool
+	AlertCheckInterval     time.Duration
+	AlertWorkerBatchSize   int
+	AlertWorkerConcurrency int
 }
 
 func LoadConfig() (Config, error) {
@@ -102,6 +106,21 @@ func LoadConfig() (Config, error) {
 	}
 	if cfg.AlertLimit, err = envInt("ALERT_LIMIT_PER_USER", 100); err != nil {
 		return Config{}, err
+	}
+	if cfg.AlertWorkerEnabled, err = envBool("ALERT_WORKER_ENABLED", true); err != nil {
+		return Config{}, err
+	}
+	if cfg.AlertCheckInterval, err = envDuration("ALERT_CHECK_INTERVAL_SECONDS", 15, time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.AlertWorkerBatchSize, err = envInt("ALERT_WORKER_BATCH_SIZE", 100); err != nil {
+		return Config{}, err
+	}
+	if cfg.AlertWorkerConcurrency, err = envInt("ALERT_WORKER_CONCURRENCY", 5); err != nil {
+		return Config{}, err
+	}
+	if cfg.AlertWorkerBatchSize <= 0 || cfg.AlertWorkerConcurrency <= 0 {
+		return Config{}, fmt.Errorf("alert worker batch size and concurrency must be greater than zero")
 	}
 	if cfg.AlertLimit <= 0 {
 		return Config{}, fmt.Errorf("ALERT_LIMIT_PER_USER must be greater than zero")

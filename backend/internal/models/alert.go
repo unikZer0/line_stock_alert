@@ -29,3 +29,12 @@ type UpdateAlertRequest struct {
 	Condition   string  `json:"condition"`
 	TargetPrice float64 `json:"target_price"`
 }
+
+type ActiveAlertJob struct {
+	ID          string
+	UserID      string
+	LineUserID  *string
+	Symbol      string
+	Condition   string
+	TargetPrice float64
+}

@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -101,6 +103,11 @@ func main() {
 	adminMonitoringRepository := repositories.NewAdminMonitoringRepository(db)
 	adminMonitoringService := services.NewAdminMonitoringService(adminMonitoringRepository)
 	adminMonitoringHandler := handlers.NewAdminMonitoringHandler(adminMonitoringService)
+	alertWorkerRepository := repositories.NewAlertWorkerRepository(db)
+	alertWorker := services.NewAlertWorker(alertWorkerRepository, stockProvider, quoteCache, lineMessenger, services.AlertWorkerConfig{
+		Interval: cfg.AlertCheckInterval, QuoteTTL: cfg.StockQuoteCacheTTL,
+		BatchSize: cfg.AlertWorkerBatchSize, Concurrency: cfg.AlertWorkerConcurrency,
+	})
 
 	e := echo.New()
 	e.HideBanner = true
@@ -169,5 +176,20 @@ func main() {
 		port = defaultPort
 	}
 
-	e.Logger.Fatal(e.Start(":" + port))
+	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if cfg.AlertWorkerEnabled {
+		go alertWorker.Run(appCtx)
+	}
+	go func() {
+		<-appCtx.Done()
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelShutdown()
+		if shutdownErr := e.Shutdown(shutdownCtx); shutdownErr != nil {
+			log.Printf("shutdown HTTP server: %v", shutdownErr)
+		}
+	}()
+	if err = e.Start(":" + port); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("start HTTP server: %v", err)
+	}
 }
