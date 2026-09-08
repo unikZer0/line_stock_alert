@@ -98,6 +98,9 @@ func main() {
 	adminStockRepository := repositories.NewAdminStockRepository(db)
 	adminStockService := services.NewAdminStockService(adminStockRepository)
 	adminStockHandler := handlers.NewAdminStockHandler(adminStockService)
+	adminMonitoringRepository := repositories.NewAdminMonitoringRepository(db)
+	adminMonitoringService := services.NewAdminMonitoringService(adminMonitoringRepository)
+	adminMonitoringHandler := handlers.NewAdminMonitoringHandler(adminMonitoringService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -153,6 +156,10 @@ func main() {
 	admin.GET("/stocks/:symbol", adminStockHandler.Get)
 	admin.POST("/stocks/:symbol/enable", adminStockHandler.Enable)
 	admin.POST("/stocks/:symbol/disable", adminStockHandler.Disable)
+	admin.GET("/line/stats", adminMonitoringHandler.LineStats)
+	admin.GET("/line/failed-messages", adminMonitoringHandler.FailedLineMessages)
+	admin.GET("/logs", adminMonitoringHandler.ApplicationLogs)
+	admin.GET("/audit-logs", adminMonitoringHandler.AuditLogs)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
