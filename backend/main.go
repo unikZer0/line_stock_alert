@@ -58,6 +58,9 @@ func main() {
 	})
 	lineHandler := handlers.NewLineOAuthHandler(lineService, cfg.FrontendURL)
 	lineAccountHandler := handlers.NewLineAccountHandler(lineService)
+	userRepository := repositories.NewUserRepository(db)
+	userService := services.NewUserService(userRepository)
+	userHandler := handlers.NewUserHandler(userService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -75,11 +78,11 @@ func main() {
 	auth.GET("/line", lineHandler.Start, authmw.RateLimit(10, time.Minute, "RATE_LIMIT_EXCEEDED"))
 	auth.GET("/line/callback", lineHandler.Callback, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
 
-	//http://localhost:8080/api/v1/accounts/line/callback
 	accounts := api.Group("/accounts")
 	accounts.POST("/line/connect", lineAccountHandler.Connect, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
 	accounts.GET("/line/callback", lineAccountHandler.Callback, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
 	accounts.DELETE("/line", lineAccountHandler.Unlink, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	api.GET("/me", userHandler.CurrentUser, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
