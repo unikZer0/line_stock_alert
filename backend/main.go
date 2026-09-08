@@ -89,6 +89,9 @@ func main() {
 	adminDashboardRepository := repositories.NewAdminDashboardRepository(db)
 	adminDashboardService := services.NewAdminDashboardService(adminDashboardRepository)
 	adminDashboardHandler := handlers.NewAdminDashboardHandler(adminDashboardService)
+	adminUserRepository := repositories.NewAdminUserRepository(db)
+	adminUserService := services.NewAdminUserService(adminUserRepository)
+	adminUserHandler := handlers.NewAdminUserHandler(adminUserService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -133,6 +136,10 @@ func main() {
 	// fresh database check for an active ADMIN role.
 	admin := api.Group("/admin", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer), authmw.RequireAdmin(adminAccessRepository))
 	admin.GET("/dashboard", adminDashboardHandler.Dashboard)
+	admin.GET("/users", adminUserHandler.List)
+	admin.GET("/users/:id", adminUserHandler.Get)
+	admin.POST("/users/:id/disable", adminUserHandler.Disable)
+	admin.POST("/users/:id/enable", adminUserHandler.Enable)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
