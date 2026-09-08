@@ -97,6 +97,9 @@ func mapAlertRepositoryError(err error, fallback string) error {
 	if errors.Is(err, repositories.ErrAlertAlreadyExists) {
 		return newError("ALERT_ALREADY_EXISTS", "An identical active alert already exists.", err)
 	}
+	if errors.Is(err, repositories.ErrStockDisabled) {
+		return newError("STOCK_NOT_FOUND", "This stock is not currently supported.", err)
+	}
 	if errors.Is(err, repositories.ErrAlertNotFound) {
 		return newError("ALERT_NOT_FOUND", "Alert not found.", err)
 	}

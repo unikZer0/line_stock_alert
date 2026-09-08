@@ -92,6 +92,9 @@ func (s *WatchlistService) Add(ctx context.Context, userID string, request model
 	if errors.Is(err, repositories.ErrStockAlreadyWatched) {
 		return models.WatchlistItem{}, newError("STOCK_ALREADY_IN_WATCHLIST", "This stock is already in the watchlist.", err)
 	}
+	if errors.Is(err, repositories.ErrStockDisabled) {
+		return models.WatchlistItem{}, newError("STOCK_NOT_FOUND", "This stock is not currently supported.", err)
+	}
 	if err != nil {
 		return models.WatchlistItem{}, newError("INTERNAL_SERVER_ERROR", "Could not add the stock to the watchlist.", err)
 	}

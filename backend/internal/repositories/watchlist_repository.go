@@ -14,6 +14,7 @@ import (
 
 var (
 	ErrStockAlreadyWatched = errors.New("stock already in watchlist")
+	ErrStockDisabled       = errors.New("stock is administratively disabled")
 	ErrWatchlistNotFound   = errors.New("watchlist entry not found")
 )
 
@@ -71,17 +72,20 @@ func (r *WatchlistRepository) Add(ctx context.Context, userID string, stock mode
 		return models.WatchlistItem{}, fmt.Errorf("begin add watchlist: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var stockID string
+	var stockID, stockStatus string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO stocks (symbol, provider, provider_symbol, name, exchange, currency)
 		VALUES ($1, 'FINNHUB', $1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''))
 		ON CONFLICT (provider, symbol) DO UPDATE SET
 		  name = COALESCE(EXCLUDED.name, stocks.name), exchange = COALESCE(EXCLUDED.exchange, stocks.exchange),
 		  currency = COALESCE(EXCLUDED.currency, stocks.currency)
-		RETURNING id::text
-	`, stock.Symbol, stock.Name, stock.Exchange, stock.Currency).Scan(&stockID)
+		RETURNING id::text, status
+	`, stock.Symbol, stock.Name, stock.Exchange, stock.Currency).Scan(&stockID, &stockStatus)
 	if err != nil {
 		return models.WatchlistItem{}, fmt.Errorf("upsert stock: %w", err)
+	}
+	if stockStatus != "ACTIVE" {
+		return models.WatchlistItem{}, ErrStockDisabled
 	}
 
 	var watchlistID string

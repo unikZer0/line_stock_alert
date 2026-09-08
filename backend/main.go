@@ -95,6 +95,9 @@ func main() {
 	adminAlertRepository := repositories.NewAdminAlertRepository(db)
 	adminAlertService := services.NewAdminAlertService(adminAlertRepository)
 	adminAlertHandler := handlers.NewAdminAlertHandler(adminAlertService)
+	adminStockRepository := repositories.NewAdminStockRepository(db)
+	adminStockService := services.NewAdminStockService(adminStockRepository)
+	adminStockHandler := handlers.NewAdminStockHandler(adminStockService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -146,6 +149,10 @@ func main() {
 	admin.GET("/alerts", adminAlertHandler.List)
 	admin.GET("/alerts/:id", adminAlertHandler.Get)
 	admin.POST("/alerts/:id/disable", adminAlertHandler.Disable)
+	admin.GET("/stocks", adminStockHandler.List)
+	admin.GET("/stocks/:symbol", adminStockHandler.Get)
+	admin.POST("/stocks/:symbol/enable", adminStockHandler.Enable)
+	admin.POST("/stocks/:symbol/disable", adminStockHandler.Disable)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

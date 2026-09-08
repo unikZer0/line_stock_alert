@@ -133,6 +133,7 @@ func handleServiceError(c echo.Context, err error) error {
 		"ADMIN_USER_NOT_FOUND":            http.StatusNotFound,
 		"ADMIN_ACTION_NOT_ALLOWED":        http.StatusBadRequest,
 		"ADMIN_ALERT_NOT_FOUND":           http.StatusNotFound,
+		"ADMIN_STOCK_NOT_FOUND":           http.StatusNotFound,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError
