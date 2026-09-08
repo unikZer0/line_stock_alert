@@ -1,0 +1,15 @@
+BEGIN;
+DROP TABLE IF EXISTS admin_audit_logs;
+DROP TABLE IF EXISTS application_logs;
+DROP TABLE IF EXISTS line_webhook_events;
+DROP TABLE IF EXISTS alert_logs;
+DROP TABLE IF EXISTS alerts;
+DROP TABLE IF EXISTS watchlist_stocks;
+DROP TABLE IF EXISTS watchlists;
+DROP TABLE IF EXISTS stocks;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS email_verification_tokens;
+DROP TABLE IF EXISTS user_identities;
+DROP TABLE IF EXISTS users;
+DROP FUNCTION IF EXISTS set_updated_at();
+COMMIT;
