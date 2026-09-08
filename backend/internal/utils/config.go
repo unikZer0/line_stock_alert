@@ -31,6 +31,12 @@ type Config struct {
 	LineCallbackURL     string
 	LineLinkCallbackURL string
 	LineStateSecret     string
+	RedisURL            string
+	StockAPIBaseURL     string
+	StockAPIKey         string
+	StockRequestTimeout time.Duration
+	StockQuoteCacheTTL  time.Duration
+	WatchlistLimit      int
 }
 
 func LoadConfig() (Config, error) {
@@ -50,6 +56,9 @@ func LoadConfig() (Config, error) {
 		LineCallbackURL:     os.Getenv("LINE_LOGIN_CALLBACK_URL"),
 		LineLinkCallbackURL: os.Getenv("LINE_LINK_CALLBACK_URL"),
 		LineStateSecret:     os.Getenv("LINE_OAUTH_STATE_SECRET"),
+		RedisURL:            os.Getenv("REDIS_URL"),
+		StockAPIBaseURL:     envOr("STOCK_API_BASE_URL", "https://finnhub.io/api/v1"),
+		StockAPIKey:         os.Getenv("STOCK_API_KEY"),
 	}
 
 	var err error
@@ -77,6 +86,18 @@ func LoadConfig() (Config, error) {
 	if cfg.SMTPUseTLS, err = envBool("SMTP_USE_TLS", false); err != nil {
 		return Config{}, err
 	}
+	if cfg.StockRequestTimeout, err = envDuration("STOCK_REQUEST_TIMEOUT_SECONDS", 10, time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.StockQuoteCacheTTL, err = envDuration("STOCK_QUOTE_CACHE_TTL_SECONDS", 15, time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.WatchlistLimit, err = envInt("WATCHLIST_LIMIT_PER_USER", 50); err != nil {
+		return Config{}, err
+	}
+	if cfg.WatchlistLimit <= 0 {
+		return Config{}, fmt.Errorf("WATCHLIST_LIMIT_PER_USER must be greater than zero")
+	}
 
 	for name, value := range map[string]string{
 		"DATABASE_URL": cfg.DatabaseURL, "JWT_ACCESS_SECRET": cfg.JWTAccessSecret,
@@ -86,6 +107,8 @@ func LoadConfig() (Config, error) {
 		"LINE_LOGIN_CHANNEL_SECRET": cfg.LineChannelSecret, "LINE_LOGIN_CALLBACK_URL": cfg.LineCallbackURL,
 		"LINE_LINK_CALLBACK_URL":  cfg.LineLinkCallbackURL,
 		"LINE_OAUTH_STATE_SECRET": cfg.LineStateSecret,
+		"REDIS_URL":               cfg.RedisURL, "STOCK_API_BASE_URL": cfg.StockAPIBaseURL,
+		"STOCK_API_KEY": cfg.StockAPIKey,
 	} {
 		if value == "" {
 			return Config{}, fmt.Errorf("%s is required", name)

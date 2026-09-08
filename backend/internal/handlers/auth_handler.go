@@ -115,6 +115,13 @@ func handleServiceError(c echo.Context, err error) error {
 		"LINE_ALREADY_LINKED":             http.StatusConflict,
 		"CANNOT_UNLINK_ONLY_LOGIN_METHOD": http.StatusBadRequest,
 		"LINE_USER_NOT_FOUND":             http.StatusNotFound,
+		"WATCHLIST_LIMIT_REACHED":         http.StatusForbidden,
+		"STOCK_NOT_FOUND":                 http.StatusNotFound,
+		"WATCHLIST_NOT_FOUND":             http.StatusNotFound,
+		"STOCK_ALREADY_IN_WATCHLIST":      http.StatusConflict,
+		"STOCK_PROVIDER_RATE_LIMIT":       http.StatusTooManyRequests,
+		"STOCK_PROVIDER_UNAVAILABLE":      http.StatusServiceUnavailable,
+		"STOCK_PROVIDER_TIMEOUT":          http.StatusGatewayTimeout,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError

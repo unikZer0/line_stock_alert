@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/redis/go-redis/v9"
 
 	"stock_linebot/backend/internal/handlers"
 	"stock_linebot/backend/internal/repositories"
@@ -36,6 +37,15 @@ func main() {
 	if err = db.Ping(ctx); err != nil {
 		log.Fatalf("connect to database: %v", err)
 	}
+	redisOptions, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("parse Redis URL: %v", err)
+	}
+	redisClient := redis.NewClient(redisOptions)
+	defer redisClient.Close()
+	if err = redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatalf("connect to Redis: %v", err)
+	}
 
 	authRepository := repositories.NewAuthRepository(db)
 	mailer := services.NewSMTPMailer(
@@ -61,6 +71,11 @@ func main() {
 	userRepository := repositories.NewUserRepository(db)
 	userService := services.NewUserService(userRepository)
 	userHandler := handlers.NewUserHandler(userService)
+	watchlistRepository := repositories.NewWatchlistRepository(db)
+	stockProvider := services.NewFinnhubClient(&http.Client{Timeout: cfg.StockRequestTimeout}, cfg.StockAPIBaseURL, cfg.StockAPIKey)
+	quoteCache := services.NewRedisQuoteCache(redisClient)
+	watchlistService := services.NewWatchlistService(watchlistRepository, stockProvider, quoteCache, cfg.WatchlistLimit, cfg.StockQuoteCacheTTL)
+	watchlistHandler := handlers.NewWatchlistHandler(watchlistService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -83,6 +98,11 @@ func main() {
 	accounts.GET("/line/callback", lineAccountHandler.Callback, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
 	accounts.DELETE("/line", lineAccountHandler.Unlink, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
 	api.GET("/me", userHandler.CurrentUser, authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+
+	watchlists := api.Group("/watchlists", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	watchlists.GET("", watchlistHandler.List)
+	watchlists.POST("", watchlistHandler.Add)
+	watchlists.DELETE("/:id", watchlistHandler.Delete)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
