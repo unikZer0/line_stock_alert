@@ -85,6 +85,10 @@ func main() {
 	lineMessenger := services.NewLineMessagingClient(&http.Client{Timeout: 10 * time.Second}, cfg.LineMessagingToken)
 	lineWebhookService := services.NewLineWebhookService(lineWebhookRepository, lineMessenger, cfg.FrontendURL)
 	lineWebhookHandler := handlers.NewLineWebhookHandler(lineWebhookService)
+	adminAccessRepository := repositories.NewAdminAccessRepository(db)
+	adminDashboardRepository := repositories.NewAdminDashboardRepository(db)
+	adminDashboardService := services.NewAdminDashboardService(adminDashboardRepository)
+	adminDashboardHandler := handlers.NewAdminDashboardHandler(adminDashboardService)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -124,6 +128,11 @@ func main() {
 	stocks.GET("", stockHandler.Search)
 	stocks.GET("/quotes", stockHandler.Quotes)
 	stocks.GET("/:symbol/quote", stockHandler.Quote)
+
+	// All endpoints added under this group inherit JWT authentication and a
+	// fresh database check for an active ADMIN role.
+	admin := api.Group("/admin", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer), authmw.RequireAdmin(adminAccessRepository))
+	admin.GET("/dashboard", adminDashboardHandler.Dashboard)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

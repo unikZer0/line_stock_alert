@@ -129,6 +129,7 @@ func handleServiceError(c echo.Context, err error) error {
 		"INVALID_ALERT_CONDITION":         http.StatusUnprocessableEntity,
 		"INVALID_TARGET_PRICE":            http.StatusUnprocessableEntity,
 		"INVALID_WEBHOOK_PAYLOAD":         http.StatusBadRequest,
+		"ADMIN_FORBIDDEN":                 http.StatusForbidden,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError
