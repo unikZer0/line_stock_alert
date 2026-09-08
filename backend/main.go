@@ -79,11 +79,18 @@ func main() {
 	alertRepository := repositories.NewAlertRepository(db)
 	alertService := services.NewAlertService(alertRepository, stockProvider, cfg.AlertLimit)
 	alertHandler := handlers.NewAlertHandler(alertService)
+	stockService := services.NewStockService(stockProvider, quoteCache, cfg.StockQuoteCacheTTL)
+	stockHandler := handlers.NewStockHandler(stockService)
+	lineWebhookRepository := repositories.NewLineWebhookRepository(db)
+	lineMessenger := services.NewLineMessagingClient(&http.Client{Timeout: 10 * time.Second}, cfg.LineMessagingToken)
+	lineWebhookService := services.NewLineWebhookService(lineWebhookRepository, lineMessenger, cfg.FrontendURL)
+	lineWebhookHandler := handlers.NewLineWebhookHandler(lineWebhookService)
 
 	e := echo.New()
 	e.HideBanner = true
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.POST("/webhooks/line", lineWebhookHandler.Receive, authmw.VerifyLineSignature(cfg.LineMessagingSecret))
 
 	api := e.Group("/api/v1")
 	auth := api.Group("/auth")
@@ -112,6 +119,11 @@ func main() {
 	alerts.POST("", alertHandler.Create, authmw.RateLimit(20, time.Minute, "RATE_LIMIT_EXCEEDED"))
 	alerts.PATCH("/:id", alertHandler.Update)
 	alerts.DELETE("/:id", alertHandler.Delete)
+
+	stocks := api.Group("/stocks", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
+	stocks.GET("", stockHandler.Search)
+	stocks.GET("/quotes", stockHandler.Quotes)
+	stocks.GET("/:symbol/quote", stockHandler.Quote)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

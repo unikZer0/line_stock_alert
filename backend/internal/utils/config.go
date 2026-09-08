@@ -31,6 +31,8 @@ type Config struct {
 	LineCallbackURL     string
 	LineLinkCallbackURL string
 	LineStateSecret     string
+	LineMessagingSecret string
+	LineMessagingToken  string
 	RedisURL            string
 	StockAPIBaseURL     string
 	StockAPIKey         string
@@ -57,6 +59,8 @@ func LoadConfig() (Config, error) {
 		LineCallbackURL:     os.Getenv("LINE_LOGIN_CALLBACK_URL"),
 		LineLinkCallbackURL: os.Getenv("LINE_LINK_CALLBACK_URL"),
 		LineStateSecret:     os.Getenv("LINE_OAUTH_STATE_SECRET"),
+		LineMessagingSecret: os.Getenv("LINE_MESSAGING_CHANNEL_SECRET"),
+		LineMessagingToken:  os.Getenv("LINE_MESSAGING_CHANNEL_ACCESS_TOKEN"),
 		RedisURL:            os.Getenv("REDIS_URL"),
 		StockAPIBaseURL:     envOr("STOCK_API_BASE_URL", "https://finnhub.io/api/v1"),
 		StockAPIKey:         os.Getenv("STOCK_API_KEY"),
@@ -112,9 +116,11 @@ func LoadConfig() (Config, error) {
 		"FROM_EMAIL":   cfg.FromEmail,
 		"FRONTEND_URL": cfg.FrontendURL, "LINE_LOGIN_CHANNEL_ID": cfg.LineChannelID,
 		"LINE_LOGIN_CHANNEL_SECRET": cfg.LineChannelSecret, "LINE_LOGIN_CALLBACK_URL": cfg.LineCallbackURL,
-		"LINE_LINK_CALLBACK_URL":  cfg.LineLinkCallbackURL,
-		"LINE_OAUTH_STATE_SECRET": cfg.LineStateSecret,
-		"REDIS_URL":               cfg.RedisURL, "STOCK_API_BASE_URL": cfg.StockAPIBaseURL,
+		"LINE_LINK_CALLBACK_URL":              cfg.LineLinkCallbackURL,
+		"LINE_OAUTH_STATE_SECRET":             cfg.LineStateSecret,
+		"LINE_MESSAGING_CHANNEL_SECRET":       cfg.LineMessagingSecret,
+		"LINE_MESSAGING_CHANNEL_ACCESS_TOKEN": cfg.LineMessagingToken,
+		"REDIS_URL":                           cfg.RedisURL, "STOCK_API_BASE_URL": cfg.StockAPIBaseURL,
 		"STOCK_API_KEY": cfg.StockAPIKey,
 	} {
 		if value == "" {

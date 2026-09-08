@@ -128,6 +128,7 @@ func handleServiceError(c echo.Context, err error) error {
 		"ALERT_NOT_FOUND":                 http.StatusNotFound,
 		"INVALID_ALERT_CONDITION":         http.StatusUnprocessableEntity,
 		"INVALID_TARGET_PRICE":            http.StatusUnprocessableEntity,
+		"INVALID_WEBHOOK_PAYLOAD":         http.StatusBadRequest,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError

@@ -7,10 +7,10 @@ type AddWatchlistRequest struct {
 }
 
 type StockMetadata struct {
-	Symbol   string
-	Name     string
-	Exchange string
-	Currency string
+	Symbol   string `json:"symbol"`
+	Name     string `json:"name"`
+	Exchange string `json:"exchange"`
+	Currency string `json:"currency"`
 }
 
 type StockQuote struct {
@@ -23,6 +23,7 @@ type StockQuote struct {
 	Low           float64   `json:"low"`
 	PreviousClose float64   `json:"previous_close"`
 	Currency      string    `json:"currency"`
+	MarketStatus  string    `json:"market_status"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	Cached        bool      `json:"cached"`
 }

@@ -19,8 +19,36 @@ var (
 )
 
 type StockProvider interface {
+	SearchUSStocks(context.Context) ([]models.StockMetadata, error)
 	ValidateUSStock(context.Context, string) (models.StockMetadata, error)
 	Quote(context.Context, string) (models.StockQuote, error)
+}
+
+func (c *FinnhubClient) SearchUSStocks(ctx context.Context) ([]models.StockMetadata, error) {
+	var response []struct {
+		Currency, Description, DisplaySymbol, MIC, Symbol, Type string
+	}
+	if err := c.get(ctx, "/stock/symbol?exchange=US", &response); err != nil {
+		return nil, err
+	}
+	stocks := make([]models.StockMetadata, 0, len(response))
+	seen := make(map[string]struct{}, len(response))
+	for _, result := range response {
+		symbol := strings.ToUpper(strings.TrimSpace(result.DisplaySymbol))
+		if symbol == "" {
+			symbol = strings.ToUpper(strings.TrimSpace(result.Symbol))
+		}
+		if !stockSymbolPattern.MatchString(symbol) {
+			continue
+		}
+		if _, exists := seen[symbol]; exists {
+			continue
+		}
+		seen[symbol] = struct{}{}
+		stocks = append(stocks, models.StockMetadata{Symbol: symbol, Name: result.Description,
+			Exchange: result.MIC, Currency: strings.ToUpper(result.Currency)})
+	}
+	return stocks, nil
 }
 
 type FinnhubClient struct {
@@ -78,7 +106,8 @@ func (c *FinnhubClient) Quote(ctx context.Context, symbol string) (models.StockQ
 	}
 	return models.StockQuote{Symbol: symbol, Price: response.Current, Change: response.Change,
 		ChangePercent: response.ChangePercent, Open: response.Open, High: response.High, Low: response.Low,
-		PreviousClose: response.PreviousClose, Currency: "USD", UpdatedAt: time.Unix(response.Timestamp, 0).UTC()}, nil
+		PreviousClose: response.PreviousClose, Currency: "USD", MarketStatus: "UNKNOWN",
+		UpdatedAt: time.Unix(response.Timestamp, 0).UTC()}, nil
 }
 
 func (c *FinnhubClient) get(ctx context.Context, path string, target any) error {
