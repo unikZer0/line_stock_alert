@@ -32,6 +32,11 @@ func NewStockService(provider StockProvider, cache QuoteCache, quoteTTL time.Dur
 	return &StockService{provider: provider, cache: cache, quoteTTL: quoteTTL}
 }
 
+func (s *StockService) MarketStatus(now time.Time) models.MarketSession {
+	status, until := usRegularMarketStatus(now)
+	return models.MarketSession{Status: status, Until: until, Market: "US"}
+}
+
 func (s *StockService) ConfigureCandles(provider CandleProvider, cache CandleCache, ttl time.Duration) {
 	s.candleProvider, s.candleCache, s.candleTTL = provider, cache, ttl
 }
@@ -125,6 +130,15 @@ func (s *StockService) Search(ctx context.Context, search, pageValue, limitValue
 			filtered = append(filtered, stock)
 		}
 	}
+	if query != "" {
+		sort.SliceStable(filtered, func(i, j int) bool {
+			left, right := stockSearchRank(filtered[i], query), stockSearchRank(filtered[j], query)
+			if left != right {
+				return left < right
+			}
+			return filtered[i].Symbol < filtered[j].Symbol
+		})
+	}
 	start := len(filtered)
 	if page <= len(filtered)/limit+1 {
 		start = (page - 1) * limit
@@ -134,6 +148,26 @@ func (s *StockService) Search(ctx context.Context, search, pageValue, limitValue
 		end = len(filtered)
 	}
 	return models.StockPage{Stocks: filtered[start:end], Page: page, Limit: limit, Total: len(filtered)}, nil
+}
+
+func stockSearchRank(stock models.StockMetadata, query string) int {
+	symbol, name := strings.ToUpper(stock.Symbol), strings.ToUpper(stock.Name)
+	switch {
+	case symbol == query:
+		return 0
+	case strings.HasPrefix(symbol, query):
+		return 1
+	case strings.Contains(symbol, query):
+		return 2
+	case strings.HasPrefix(name, query):
+		return 3
+	}
+	for _, word := range strings.Fields(name) {
+		if strings.HasPrefix(word, query) {
+			return 4
+		}
+	}
+	return 5
 }
 
 func (s *StockService) Quote(ctx context.Context, rawSymbol string) (models.StockQuoteDetail, error) {

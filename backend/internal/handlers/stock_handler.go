@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"stock_linebot/backend/internal/services"
@@ -12,6 +13,10 @@ type StockHandler struct{ service *services.StockService }
 
 func NewStockHandler(service *services.StockService) *StockHandler {
 	return &StockHandler{service: service}
+}
+
+func (h *StockHandler) MarketStatus(c echo.Context) error {
+	return utils.JSONSuccess(c, http.StatusOK, h.service.MarketStatus(time.Now()), "")
 }
 
 func (h *StockHandler) Search(c echo.Context) error {

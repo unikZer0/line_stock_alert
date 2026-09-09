@@ -1,6 +1,6 @@
 import { apiRequest } from "../../../services/api/apiClient";
 import type { ApiPageResponse, ApiResponse } from "../../../types/api";
-import type { CandleRange, Stock, StockCandleSeries, StockQuote } from "../types/stock";
+import type { CandleRange, MarketSession, Stock, StockCandleSeries, StockQuote } from "../types/stock";
 
 export function getStocks(search: string, page: number) {
   return apiRequest<ApiPageResponse<Stock[]>>(
@@ -14,4 +14,8 @@ export function getStockQuote(symbol: string) {
 
 export function getStockCandles(symbol: string, range: CandleRange) {
   return apiRequest<ApiResponse<StockCandleSeries>>(`/stocks/${encodeURIComponent(symbol)}/candles?range=${range}`);
+}
+
+export function getMarketStatus() {
+  return apiRequest<ApiResponse<MarketSession>>("/stocks/market-status");
 }

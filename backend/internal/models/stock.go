@@ -77,3 +77,9 @@ type StockCandleSeries struct {
 	Candles  []StockCandle `json:"candles"`
 	Cached   bool          `json:"cached"`
 }
+
+type MarketSession struct {
+	Status string    `json:"status"`
+	Until  time.Time `json:"until"`
+	Market string    `json:"market"`
+}

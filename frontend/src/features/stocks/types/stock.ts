@@ -25,3 +25,5 @@ export interface StockCandleSeries {
   symbol: string; range: CandleRange; interval: string; currency: string; timezone: string;
   candles: StockCandle[]; cached: boolean;
 }
+
+export interface MarketSession { status: "OPEN" | "CLOSED"; until: string; market: "US"; }

@@ -1,19 +1,5 @@
+import { rememberStock } from "../services/stockSearchHistory";
 import type { Stock } from "../types/stock";
-
-interface StockGridProps {
-  stocks: Stock[];
-}
-
-export function StockGrid({ stocks }: StockGridProps) {
-  return (
-    <section className="grid">
-      {stocks.map((stock) => (
-        <a className="card stock" href={`/stocks/${stock.symbol}`} key={stock.symbol}>
-          <strong>{stock.symbol}</strong>
-          <span>{stock.name || "US stock"}</span>
-          <small>{stock.exchange} · {stock.currency || "USD"}</small>
-        </a>
-      ))}
-    </section>
-  );
+export function StockGrid({ stocks }: { stocks: Stock[] }) {
+  return <section className="stock-feed">{stocks.map((stock) => <a className="stock-row" href={`/stocks/${stock.symbol}`} onClick={() => rememberStock(stock)} key={stock.symbol}><div><b>{stock.symbol}</b><small>{stock.exchange || "US"}</small><span>{stock.name || "US stock"}</span></div><strong>›</strong></a>)}</section>;
 }

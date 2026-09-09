@@ -130,6 +130,7 @@ func main() {
 
 	stocks := api.Group("/stocks", authmw.RequireAuth(cfg.JWTAccessSecret, cfg.JWTIssuer))
 	stocks.GET("", stockHandler.Search)
+	stocks.GET("/market-status", stockHandler.MarketStatus)
 	stocks.GET("/quotes", stockHandler.Quotes)
 	stocks.GET("/:symbol/candles", stockHandler.Candles)
 	stocks.GET("/:symbol/quote", stockHandler.Quote)

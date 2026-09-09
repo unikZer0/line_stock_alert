@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { AppHeader } from "./AppHeader";
+import { BottomNav } from "./BottomNav";
 
 interface PageLayoutProps {
   children: ReactNode;
@@ -7,14 +9,9 @@ interface PageLayoutProps {
 export function PageLayout({ children }: PageLayoutProps) {
   return (
     <>
-      <header>
-        <a className="brand" href="/stocks">Stock Alert</a>
-        <nav>
-          <a href="/stocks">Stocks</a>
-          <a href="/alerts">My Alerts</a>
-        </nav>
-      </header>
-      <main>{children}</main>
+      <AppHeader />
+      <main className="app-main">{children}</main>
+      <BottomNav />
     </>
   );
 }

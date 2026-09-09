@@ -40,5 +40,5 @@ export function useAlerts() {
     await load();
   };
 
-  return { alerts, loading, error, setError, edit, remove, rearm };
+  return { alerts, loading, error, setError, edit, remove, rearm, reload: load };
 }

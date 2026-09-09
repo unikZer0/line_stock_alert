@@ -6,9 +6,10 @@ import type { AlertCondition } from "../types/alert";
 interface AlertFormProps {
   symbol: string;
   initialPrice: number;
+  onCreated?: () => void;
 }
 
-export function AlertForm({ symbol, initialPrice }: AlertFormProps) {
+export function AlertForm({ symbol, initialPrice, onCreated }: AlertFormProps) {
   const [condition, setCondition] = useState<AlertCondition>("ABOVE");
   const [targetPrice, setTargetPrice] = useState(String(initialPrice));
   const [submitting, setSubmitting] = useState(false);
@@ -25,6 +26,7 @@ export function AlertForm({ symbol, initialPrice }: AlertFormProps) {
     try {
       await createAlert({ symbol, condition, target_price: Number(targetPrice) });
       setNotice("Alert created. LINE will notify you once when it triggers.");
+      onCreated?.();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not create the alert.");
     } finally {
