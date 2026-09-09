@@ -26,6 +26,11 @@ export function getAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
+export function saveSession(accessToken: string, refreshToken: string) {
+  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+}
+
 export function startLineLogin() {
   sessionStorage.setItem(RETURN_TO_KEY, window.location.pathname + window.location.search);
   window.location.assign(`${API_BASE_URL}/auth/line`);
