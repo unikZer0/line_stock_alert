@@ -97,6 +97,9 @@ func handleServiceError(c echo.Context, err error) error {
 		"ADMIN_ACTION_NOT_ALLOWED":       http.StatusBadRequest,
 		"ADMIN_ALERT_NOT_FOUND":          http.StatusNotFound,
 		"ADMIN_STOCK_NOT_FOUND":          http.StatusNotFound,
+		"INVALID_RICH_MENU_IMAGE":        http.StatusUnprocessableEntity,
+		"INVALID_FRONTEND_URL":           http.StatusUnprocessableEntity,
+		"LINE_RICH_MENU_PROVIDER_ERROR":  http.StatusBadGateway,
 	}[appErr.Code]
 	if status == 0 {
 		status = http.StatusInternalServerError

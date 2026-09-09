@@ -95,6 +95,9 @@ func main() {
 	adminMonitoringRepository := repositories.NewAdminMonitoringRepository(db)
 	adminMonitoringService := services.NewAdminMonitoringService(adminMonitoringRepository)
 	adminMonitoringHandler := handlers.NewAdminMonitoringHandler(adminMonitoringService)
+	richMenuRepository := repositories.NewRichMenuRepository(db)
+	richMenuService := services.NewRichMenuService(&http.Client{Timeout: 20 * time.Second}, cfg.LineMessagingToken, cfg.FrontendURL, richMenuRepository)
+	richMenuHandler := handlers.NewRichMenuHandler(richMenuService)
 	alertWorkerRepository := repositories.NewAlertWorkerRepository(db)
 	alertWorker := services.NewAlertWorker(alertWorkerRepository, stockProvider, quoteCache, lineMessenger, services.AlertWorkerConfig{
 		Interval: cfg.AlertCheckInterval, QuoteTTL: cfg.StockQuoteCacheTTL,
@@ -154,6 +157,7 @@ func main() {
 	admin.GET("/line/failed-messages", adminMonitoringHandler.FailedLineMessages)
 	admin.GET("/logs", adminMonitoringHandler.ApplicationLogs)
 	admin.GET("/audit-logs", adminMonitoringHandler.AuditLogs)
+	admin.POST("/line/rich-menu/publish", richMenuHandler.Publish)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

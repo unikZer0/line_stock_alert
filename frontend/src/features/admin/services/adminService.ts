@@ -1,6 +1,7 @@
 import { apiRequest } from "../../../services/api/apiClient";
 import type { ApiPageResponse, ApiResponse } from "../../../types/api";
 import { API_BASE_URL } from "../../auth/services/sessionService";
+import { getAccessToken } from "../../auth/services/sessionService";
 
 export type AdminRecord = Record<string, unknown>;
 export const getAdminDashboard = () => apiRequest<ApiResponse<AdminRecord>>("/admin/dashboard");
@@ -15,5 +16,13 @@ export async function adminLogin(email: string, password: string) {
   const response = await fetch(`${API_BASE_URL}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
   const result = await response.json() as ApiResponse<{ access_token: string; refresh_token: string }> & { error?: { message?: string } };
   if (!response.ok) throw new Error(result.error?.message || "Administrator login failed.");
+  return result.data;
+}
+
+export async function publishRichMenu(image: File) {
+  const data = new FormData(); data.append("image", image);
+  const response = await fetch(`${API_BASE_URL}/admin/line/rich-menu/publish`, { method: "POST", headers: { Authorization: `Bearer ${getAccessToken() || ""}` }, body: data });
+  const result = await response.json() as ApiResponse<{ rich_menu_id: string; status: string }> & { error?: { message?: string } };
+  if (!response.ok) throw new Error(result.error?.message || "Rich menu publication failed.");
   return result.data;
 }

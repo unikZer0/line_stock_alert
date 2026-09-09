@@ -3,6 +3,7 @@ import { ErrorState } from "../../../components/common/ErrorState";
 import { LoadingState } from "../../../components/common/LoadingState";
 import { AdminLayout } from "../components/AdminLayout";
 import { AdminTable } from "../components/AdminTable";
+import { RichMenuPublisher } from "../components/RichMenuPublisher";
 import { getAdminAlerts, getAdminDashboard, getAdminStocks, getAdminUsers, getApplicationLogs, getAuditLogs, getLineStats, type AdminRecord } from "../services/adminService";
 
 type Config = { title: string; subtitle: string; load: () => Promise<unknown>; columns?: string[] };
@@ -27,6 +28,7 @@ export function AdminPage() {
     <section className="admin-title"><div><h1>{config.title}</h1><p>{config.subtitle}</p></div><button onClick={() => window.location.reload()}>↻ Refresh</button></section>
     {loading && <LoadingState />}{error && <ErrorState message={error} />}
     {metrics.length > 0 && <section className="admin-metrics">{metrics.map(([label,value]) => <article key={String(label)}><small>{String(label).replaceAll("_"," ")}</small><b>{String(value)}</b><span>LIVE DATABASE</span></article>)}</section>}
+    {path === "/admin/line" && <RichMenuPublisher />}
     {config.columns && <><div className="admin-filters"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search current records…" /><span>{filtered.length} RECORDS</span></div><AdminTable rows={filtered} columns={config.columns} /></>}
   </AdminLayout>;
 }
