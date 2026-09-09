@@ -95,34 +95,11 @@ func (r *AdminUserRepository) Get(ctx context.Context, userID string) (models.Ad
 	if err = rows.Err(); err != nil {
 		return models.AdminUserDetail{}, fmt.Errorf("read admin user providers: %w", err)
 	}
-	user.Watchlists, err = r.listWatchlists(ctx, userID)
-	if err != nil {
-		return models.AdminUserDetail{}, err
-	}
 	user.Alerts, err = r.listAlerts(ctx, userID)
 	if err != nil {
 		return models.AdminUserDetail{}, err
 	}
 	return user, nil
-}
-
-func (r *AdminUserRepository) listWatchlists(ctx context.Context, userID string) ([]models.WatchlistItem, error) {
-	rows, err := r.db.Query(ctx, `SELECT ws.id::text, s.symbol, COALESCE(s.name,''), COALESCE(s.exchange,''), COALESCE(s.currency,'USD'), ws.created_at
-		FROM watchlist_stocks ws JOIN watchlists w ON w.id=ws.watchlist_id JOIN stocks s ON s.id=ws.stock_id
-		WHERE w.user_id::text=$1 ORDER BY ws.created_at DESC`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list admin user watchlist: %w", err)
-	}
-	defer rows.Close()
-	items := make([]models.WatchlistItem, 0)
-	for rows.Next() {
-		var item models.WatchlistItem
-		if err = rows.Scan(&item.ID, &item.Symbol, &item.Name, &item.Exchange, &item.Currency, &item.CreatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, rows.Err()
 }
 
 func (r *AdminUserRepository) listAlerts(ctx context.Context, userID string) ([]models.Alert, error) {

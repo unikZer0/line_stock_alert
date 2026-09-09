@@ -2,14 +2,12 @@ package services
 
 import (
 	"context"
-	"errors"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"stock_linebot/backend/internal/models"
-	"stock_linebot/backend/internal/repositories"
 )
 
 type fakeLineProvider struct {
@@ -25,23 +23,6 @@ func (f *fakeLineProvider) ExchangeAndVerify(_ context.Context, _ string, nonce,
 type fakeLineStore struct {
 	user       models.User
 	lineUserID string
-	connected  bool
-	linkedID   string
-	linkErr    error
-	unlinkErr  error
-}
-
-func (f *fakeLineStore) UserHasLineIdentity(context.Context, string) (bool, error) {
-	return f.connected, nil
-}
-
-func (f *fakeLineStore) LinkLineIdentity(_ context.Context, _, lineUserID string) error {
-	f.linkedID = lineUserID
-	return f.linkErr
-}
-
-func (f *fakeLineStore) UnlinkLineIdentity(context.Context, string) error {
-	return f.unlinkErr
 }
 
 func (f *fakeLineStore) FindOrCreateLineUser(_ context.Context, lineUserID, _ string) (models.User, error) {
@@ -58,7 +39,7 @@ func (fakeRefreshStore) CreateRefreshToken(context.Context, string, string, time
 func TestLineAuthorizationURLAndLogin(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	secret := strings.Repeat("l", 32)
-	auth := NewAuthService(fakeRefreshStore{}, nil, AuthConfig{
+	auth := NewAuthService(fakeRefreshStore{}, AuthConfig{
 		AccessSecret: strings.Repeat("a", 32), RefreshSecret: strings.Repeat("r", 32),
 		Issuer: "test", AccessTTL: time.Hour, RefreshTTL: 24 * time.Hour,
 	})
@@ -67,8 +48,7 @@ func TestLineAuthorizationURLAndLogin(t *testing.T) {
 	store := &fakeLineStore{user: models.User{ID: "user-1", Role: "USER", Status: "ACTIVE"}}
 	service := NewLineOAuthService(store, provider, auth, LineOAuthConfig{
 		ChannelID: "channel-id", CallbackURL: "http://localhost:8080/api/v1/auth/line/callback",
-		LinkCallbackURL: "http://localhost:8080/api/v1/accounts/line/callback",
-		StateSecret:     secret, Issuer: "test", StateTTL: 10 * time.Minute,
+		StateSecret: secret, Issuer: "test", StateTTL: 10 * time.Minute,
 	})
 	service.now = func() time.Time { return now }
 
@@ -100,49 +80,6 @@ func TestLineAuthorizationURLAndLogin(t *testing.T) {
 	}
 	if result.AccessToken == "" || result.RefreshToken == "" {
 		t.Fatalf("missing application tokens: %#v", result)
-	}
-}
-
-func TestLineAccountLinking(t *testing.T) {
-	now := time.Unix(1_800_000_000, 0)
-	provider := &fakeLineProvider{identity: LineIdentity{UserID: "U-linked"}}
-	store := &fakeLineStore{}
-	service := NewLineOAuthService(store, provider, nil, LineOAuthConfig{
-		ChannelID: "channel-id", LinkCallbackURL: "http://localhost:8080/api/v1/accounts/line/callback",
-		StateSecret: strings.Repeat("l", 32), Issuer: "test", StateTTL: 10 * time.Minute,
-	})
-	service.now = func() time.Time { return now }
-	authorizationURL, err := service.ConnectAuthorizationURL(context.Background(), "user-1")
-	if err != nil {
-		t.Fatalf("ConnectAuthorizationURL: %v", err)
-	}
-	parsed, _ := url.Parse(authorizationURL)
-	if parsed.Query().Get("redirect_uri") != service.cfg.LinkCallbackURL {
-		t.Fatal("link callback URL was not used")
-	}
-	if err = service.Link(context.Background(), "code", parsed.Query().Get("state")); err != nil {
-		t.Fatalf("Link: %v", err)
-	}
-	if store.linkedID != "U-linked" {
-		t.Fatalf("linked LINE ID = %q", store.linkedID)
-	}
-}
-
-func TestConnectRejectsExistingLineIdentity(t *testing.T) {
-	service := NewLineOAuthService(&fakeLineStore{connected: true}, nil, nil, LineOAuthConfig{})
-	_, err := service.ConnectAuthorizationURL(context.Background(), "user-1")
-	var appErr *Error
-	if !errors.As(err, &appErr) || appErr.Code != "USER_ALREADY_HAS_LINE" {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestUnlinkProtectsOnlyLoginMethod(t *testing.T) {
-	service := NewLineOAuthService(&fakeLineStore{unlinkErr: repositories.ErrCannotUnlinkOnlyLogin}, nil, nil, LineOAuthConfig{})
-	err := service.Unlink(context.Background(), "user-1")
-	var appErr *Error
-	if !errors.As(err, &appErr) || appErr.Code != "CANNOT_UNLINK_ONLY_LOGIN_METHOD" {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

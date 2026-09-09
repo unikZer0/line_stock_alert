@@ -70,3 +70,15 @@ func (h *AlertHandler) Delete(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusNoContent)
 }
+
+func (h *AlertHandler) Rearm(c echo.Context) error {
+	userID, ok := c.Get(authmw.UserIDKey).(string)
+	if !ok || userID == "" {
+		return utils.JSONError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication is required.", nil)
+	}
+	alert, err := h.service.Rearm(c.Request().Context(), userID, c.Param("id"))
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return utils.JSONSuccess(c, http.StatusOK, alert, "Alert re-armed successfully.")
+}

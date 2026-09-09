@@ -18,9 +18,8 @@ type AdminUser struct {
 
 type AdminUserDetail struct {
 	AdminUser
-	Providers  []string        `json:"providers"`
-	Watchlists []WatchlistItem `json:"watchlists"`
-	Alerts     []Alert         `json:"alerts"`
+	Providers []string `json:"providers"`
+	Alerts    []Alert  `json:"alerts"`
 }
 
 type AdminUserFilter struct {

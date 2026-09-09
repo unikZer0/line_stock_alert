@@ -11,7 +11,6 @@ type AdminStock struct {
 	Status         string     `json:"status"`
 	DisabledReason *string    `json:"disabled_reason,omitempty"`
 	DisabledAt     *time.Time `json:"disabled_at,omitempty"`
-	WatchingUsers  int64      `json:"watching_users"`
 	Alerts         int64      `json:"alerts"`
 	ActiveAlerts   int64      `json:"active_alerts"`
 	LastQuotePrice *float64   `json:"last_quote_price,omitempty"`

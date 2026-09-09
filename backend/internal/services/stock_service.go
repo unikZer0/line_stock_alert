@@ -19,6 +19,9 @@ type StockService struct {
 	provider       StockProvider
 	cache          QuoteCache
 	quoteTTL       time.Duration
+	candleProvider CandleProvider
+	candleCache    CandleCache
+	candleTTL      time.Duration
 	flights        singleflight.Group
 	catalogMu      sync.RWMutex
 	catalog        []models.StockMetadata
@@ -27,6 +30,79 @@ type StockService struct {
 
 func NewStockService(provider StockProvider, cache QuoteCache, quoteTTL time.Duration) *StockService {
 	return &StockService{provider: provider, cache: cache, quoteTTL: quoteTTL}
+}
+
+func (s *StockService) ConfigureCandles(provider CandleProvider, cache CandleCache, ttl time.Duration) {
+	s.candleProvider, s.candleCache, s.candleTTL = provider, cache, ttl
+}
+
+type candleRange struct {
+	interval   string
+	outputSize int
+}
+
+var candleRanges = map[string]candleRange{
+	"1D":  {interval: "5min", outputSize: 78},
+	"1W":  {interval: "30min", outputSize: 70},
+	"1M":  {interval: "1day", outputSize: 31},
+	"3M":  {interval: "1day", outputSize: 93},
+	"1Y":  {interval: "1week", outputSize: 53},
+	"MAX": {interval: "1month", outputSize: 240},
+}
+
+func (s *StockService) Candles(ctx context.Context, rawSymbol, rawRange string) (models.StockCandleSeries, error) {
+	symbol := strings.ToUpper(strings.TrimSpace(rawSymbol))
+	if !stockSymbolPattern.MatchString(symbol) {
+		return models.StockCandleSeries{}, newError("STOCK_NOT_FOUND", "The US stock symbol was not found.", nil)
+	}
+	rangeName := strings.ToUpper(strings.TrimSpace(rawRange))
+	if rangeName == "" {
+		rangeName = "1D"
+	}
+	config, ok := candleRanges[rangeName]
+	if !ok {
+		return models.StockCandleSeries{}, newError("INVALID_CANDLE_RANGE", "Range must be one of 1D, 1W, 1M, 3M, 1Y, or MAX.", nil)
+	}
+	if s.candleProvider == nil || s.candleCache == nil {
+		return models.StockCandleSeries{}, newError("CANDLE_PROVIDER_UNAVAILABLE", "Historical prices are temporarily unavailable.", nil)
+	}
+	stock, err := s.provider.ValidateUSStock(ctx, symbol)
+	if err != nil {
+		return models.StockCandleSeries{}, mapStockProviderError(err)
+	}
+	cacheKey := stock.Symbol + ":" + rangeName
+	if series, found, cacheErr := s.candleCache.GetCandles(ctx, cacheKey); cacheErr == nil && found {
+		return series, nil
+	}
+	value, err, _ := s.flights.Do("candles:"+cacheKey, func() (any, error) {
+		if series, found, cacheErr := s.candleCache.GetCandles(ctx, cacheKey); cacheErr == nil && found {
+			return series, nil
+		}
+		series, providerErr := s.candleProvider.Candles(ctx, stock.Symbol, config.interval, config.outputSize)
+		if providerErr != nil {
+			return models.StockCandleSeries{}, providerErr
+		}
+		series.Range = rangeName
+		_ = s.candleCache.SetCandles(ctx, cacheKey, series, s.candleTTL)
+		return series, nil
+	})
+	if err != nil {
+		return models.StockCandleSeries{}, mapCandleProviderError(err)
+	}
+	return value.(models.StockCandleSeries), nil
+}
+
+func mapCandleProviderError(err error) error {
+	switch {
+	case errors.Is(err, ErrCandleNotFound):
+		return newError("CANDLE_DATA_NOT_FOUND", "No historical prices were found for this stock and range.", err)
+	case errors.Is(err, ErrCandleProviderRateLimit):
+		return newError("CANDLE_PROVIDER_RATE_LIMIT", "Historical price provider rate limit reached. Try again shortly.", err)
+	case errors.Is(err, context.DeadlineExceeded):
+		return newError("CANDLE_PROVIDER_TIMEOUT", "Historical price provider timed out.", err)
+	default:
+		return newError("CANDLE_PROVIDER_UNAVAILABLE", "Historical prices are temporarily unavailable.", err)
+	}
 }
 
 func (s *StockService) Search(ctx context.Context, search, pageValue, limitValue string) (models.StockPage, error) {
@@ -191,8 +267,10 @@ func positiveInt(value string, fallback, maximum int) (int, error) {
 }
 
 func quoteDetail(name string, quote models.StockQuote) models.StockQuoteDetail {
+	marketStatus, marketStatusUntil := usRegularMarketStatus(time.Now())
 	return models.StockQuoteDetail{Symbol: quote.Symbol, Name: name, Price: quote.Price, Change: quote.Change,
 		ChangePercent: quote.ChangePercent, Open: quote.Open, High: quote.High, Low: quote.Low,
-		PreviousClose: quote.PreviousClose, Currency: quote.Currency, MarketStatus: quote.MarketStatus,
-		UpdatedAt: quote.UpdatedAt.Format(time.RFC3339), Cached: quote.Cached}
+		PreviousClose: quote.PreviousClose, Currency: quote.Currency, MarketStatus: marketStatus,
+		MarketStatusUntil: marketStatusUntil.Format(time.RFC3339),
+		UpdatedAt:         quote.UpdatedAt.Format(time.RFC3339), Cached: quote.Cached}
 }

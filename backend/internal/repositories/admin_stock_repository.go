@@ -31,7 +31,6 @@ func (r *AdminStockRepository) List(ctx context.Context, filter models.AdminStoc
 	rows, err := r.db.Query(ctx, `
 		SELECT s.symbol,COALESCE(s.name,''),s.provider,COALESCE(s.exchange,''),COALESCE(s.currency,'USD'),s.status,
 		 s.disabled_reason,s.disabled_at,
-		 (SELECT COUNT(DISTINCT w.user_id) FROM watchlist_stocks ws JOIN watchlists w ON w.id=ws.watchlist_id WHERE ws.stock_id=s.id),
 		 (SELECT COUNT(*) FROM alerts a WHERE a.stock_id=s.id),
 		 (SELECT COUNT(*) FROM alerts a WHERE a.stock_id=s.id AND a.status='ACTIVE'),
 		 s.last_quote_price,s.last_quote_at,s.created_at,s.updated_at
@@ -60,7 +59,6 @@ func (r *AdminStockRepository) Get(ctx context.Context, symbol string) (models.A
 	err := scanAdminStock(r.db.QueryRow(ctx, `
 		SELECT s.symbol,COALESCE(s.name,''),s.provider,COALESCE(s.exchange,''),COALESCE(s.currency,'USD'),s.status,
 		 s.disabled_reason,s.disabled_at,
-		 (SELECT COUNT(DISTINCT w.user_id) FROM watchlist_stocks ws JOIN watchlists w ON w.id=ws.watchlist_id WHERE ws.stock_id=s.id),
 		 (SELECT COUNT(*) FROM alerts a WHERE a.stock_id=s.id),
 		 (SELECT COUNT(*) FROM alerts a WHERE a.stock_id=s.id AND a.status='ACTIVE'),
 		 s.last_quote_price,s.last_quote_at,s.created_at,s.updated_at
@@ -76,7 +74,7 @@ func (r *AdminStockRepository) Get(ctx context.Context, symbol string) (models.A
 
 func scanAdminStock(row rowScanner, stock *models.AdminStock) error {
 	return row.Scan(&stock.Symbol, &stock.Name, &stock.Provider, &stock.Exchange, &stock.Currency, &stock.Status,
-		&stock.DisabledReason, &stock.DisabledAt, &stock.WatchingUsers, &stock.Alerts, &stock.ActiveAlerts, &stock.LastQuotePrice, &stock.LastQuoteAt, &stock.CreatedAt, &stock.UpdatedAt)
+		&stock.DisabledReason, &stock.DisabledAt, &stock.Alerts, &stock.ActiveAlerts, &stock.LastQuotePrice, &stock.LastQuoteAt, &stock.CreatedAt, &stock.UpdatedAt)
 }
 
 func (r *AdminStockRepository) SetStatus(ctx context.Context, action models.AdminActionContext, symbol, status, reason string) error {

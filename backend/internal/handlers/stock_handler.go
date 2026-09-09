@@ -41,3 +41,11 @@ func (h *StockHandler) Quotes(c echo.Context) error {
 	}
 	return utils.JSONSuccess(c, http.StatusOK, quotes, "")
 }
+
+func (h *StockHandler) Candles(c echo.Context) error {
+	series, err := h.service.Candles(c.Request().Context(), c.Param("symbol"), c.QueryParam("range"))
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return utils.JSONSuccess(c, http.StatusOK, series, "")
+}

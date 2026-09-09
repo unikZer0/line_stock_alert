@@ -11,10 +11,12 @@ import (
 
 type AlertStore interface {
 	List(context.Context, string, models.AlertFilter) ([]models.Alert, error)
+	Get(context.Context, string, string) (models.Alert, error)
 	CountActive(context.Context, string) (int, error)
 	Create(context.Context, string, models.StockMetadata, string, float64) (models.Alert, error)
 	Update(context.Context, string, string, string, float64) (models.Alert, error)
 	Delete(context.Context, string, string) error
+	Rearm(context.Context, string, string) (models.Alert, error)
 }
 
 type AlertService struct {
@@ -80,6 +82,42 @@ func (s *AlertService) Delete(ctx context.Context, userID, alertID string) error
 	return mapAlertRepositoryError(err, "Could not delete the alert.")
 }
 
+func (s *AlertService) Rearm(ctx context.Context, userID, alertID string) (models.Alert, error) {
+	alertID = strings.TrimSpace(alertID)
+	alert, err := s.store.Get(ctx, userID, alertID)
+	if err != nil {
+		return models.Alert{}, mapAlertRepositoryError(err, "Could not load the alert.")
+	}
+	if alert.Status != "TRIGGERED" {
+		return models.Alert{}, newError("ALERT_NOT_TRIGGERED", "Only a triggered alert can be re-armed.", nil)
+	}
+	count, err := s.store.CountActive(ctx, userID)
+	if err != nil {
+		return models.Alert{}, newError("INTERNAL_SERVER_ERROR", "Could not check the alert limit.", err)
+	}
+	if count >= s.limit {
+		return models.Alert{}, newError("ALERT_LIMIT_REACHED", "The active alert limit has been reached.", nil)
+	}
+	quote, err := s.provider.Quote(ctx, alert.Symbol)
+	if err != nil {
+		return models.Alert{}, mapStockProviderError(err)
+	}
+	if alertConditionMet(alert.Condition, quote.Price, alert.TargetPrice) {
+		return models.Alert{}, newError(
+			"ALERT_CONDITION_STILL_MET",
+			"The price must move away from the target before this alert can be re-armed.",
+			nil,
+		)
+	}
+	rearmed, err := s.store.Rearm(ctx, userID, alertID)
+	return rearmed, mapAlertRepositoryError(err, "Could not re-arm the alert.")
+}
+
+func alertConditionMet(condition string, currentPrice, targetPrice float64) bool {
+	return condition == "ABOVE" && currentPrice >= targetPrice ||
+		condition == "BELOW" && currentPrice <= targetPrice
+}
+
 func validateAlert(condition string, targetPrice float64) error {
 	if condition != "ABOVE" && condition != "BELOW" {
 		return newError("INVALID_ALERT_CONDITION", "Condition must be ABOVE or BELOW.", nil)
@@ -102,6 +140,9 @@ func mapAlertRepositoryError(err error, fallback string) error {
 	}
 	if errors.Is(err, repositories.ErrAlertNotFound) {
 		return newError("ALERT_NOT_FOUND", "Alert not found.", err)
+	}
+	if errors.Is(err, repositories.ErrAlertNotTriggered) {
+		return newError("ALERT_NOT_TRIGGERED", "Only a triggered alert can be re-armed.", err)
 	}
 	return newError("INTERNAL_SERVER_ERROR", fallback, err)
 }

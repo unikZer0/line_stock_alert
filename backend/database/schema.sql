@@ -29,19 +29,6 @@ CREATE TABLE user_identities (
     UNIQUE (user_id, provider)
 );
 
-CREATE TABLE email_verification_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    purpose VARCHAR(30) NOT NULL DEFAULT 'VERIFY_EMAIL' CHECK (purpose IN ('VERIFY_EMAIL')),
-    otp_hash TEXT NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    used_at TIMESTAMPTZ,
-    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (used_at IS NULL OR used_at >= created_at),
-    CHECK (expires_at > created_at)
-);
-
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -79,23 +66,6 @@ CREATE TABLE stocks (
     CHECK ((status = 'ACTIVE' AND disabled_at IS NULL) OR status = 'DISABLED')
 );
 
-CREATE TABLE watchlists (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE UNIQUE INDEX uq_watchlists_user_name ON watchlists (user_id, LOWER(name));
-
-CREATE TABLE watchlist_stocks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    watchlist_id UUID NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
-    stock_id UUID NOT NULL REFERENCES stocks(id) ON DELETE RESTRICT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (watchlist_id, stock_id)
-);
-
 CREATE TABLE alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -118,7 +88,7 @@ CREATE TABLE alert_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     alert_id UUID REFERENCES alerts(id) ON DELETE SET NULL,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    channel VARCHAR(20) NOT NULL CHECK (channel IN ('LINE', 'EMAIL')),
+    channel VARCHAR(20) NOT NULL CHECK (channel = 'LINE'),
     status VARCHAR(20) NOT NULL CHECK (status IN ('PENDING', 'SENT', 'FAILED')),
     message TEXT,
     triggered_price NUMERIC(20, 8) NOT NULL CHECK (triggered_price >= 0),
@@ -169,12 +139,9 @@ CREATE TABLE admin_audit_logs (
 );
 
 CREATE INDEX idx_user_identities_user_id ON user_identities (user_id);
-CREATE INDEX idx_email_verification_tokens_user_created ON email_verification_tokens (user_id, created_at DESC);
 CREATE INDEX idx_refresh_tokens_user_active ON refresh_tokens (user_id, expires_at) WHERE revoked_at IS NULL;
 CREATE INDEX idx_refresh_tokens_family ON refresh_tokens (family_id);
 CREATE INDEX idx_stocks_symbol ON stocks (symbol);
-CREATE INDEX idx_watchlists_user ON watchlists (user_id);
-CREATE INDEX idx_watchlist_stocks_stock ON watchlist_stocks (stock_id);
 CREATE INDEX idx_alerts_active_stock ON alerts (stock_id) WHERE status = 'ACTIVE';
 CREATE INDEX idx_alerts_user_created ON alerts (user_id, created_at DESC);
 CREATE INDEX idx_alert_logs_alert_created ON alert_logs (alert_id, created_at DESC);
@@ -195,7 +162,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER users_set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER user_identities_set_updated_at BEFORE UPDATE ON user_identities FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER stocks_set_updated_at BEFORE UPDATE ON stocks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER watchlists_set_updated_at BEFORE UPDATE ON watchlists FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER alerts_set_updated_at BEFORE UPDATE ON alerts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 COMMIT;

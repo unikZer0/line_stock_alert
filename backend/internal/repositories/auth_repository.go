@@ -14,12 +14,8 @@ import (
 )
 
 var (
-	ErrNotFound              = errors.New("record not found")
-	ErrEmailExists           = errors.New("email already exists")
-	ErrTokenConflict         = errors.New("token already exists")
-	ErrUserAlreadyHasLine    = errors.New("user already has LINE identity")
-	ErrLineAlreadyLinked     = errors.New("LINE identity already linked")
-	ErrCannotUnlinkOnlyLogin = errors.New("cannot unlink only login method")
+	ErrNotFound      = errors.New("record not found")
+	ErrTokenConflict = errors.New("token already exists")
 )
 
 type AuthRepository struct {
@@ -28,42 +24,6 @@ type AuthRepository struct {
 
 func NewAuthRepository(db *pgxpool.Pool) *AuthRepository {
 	return &AuthRepository{db: db}
-}
-
-func (r *AuthRepository) CreateUserWithVerification(
-	ctx context.Context, email, passwordHash, otpHash string, expiresAt time.Time,
-) (models.User, error) {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return models.User{}, fmt.Errorf("begin registration: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var user models.User
-	err = tx.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash)
-		VALUES ($1, $2)
-		RETURNING id::text, email::text, password_hash, role, status, email_verified_at
-	`, email, passwordHash).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.Status, &user.EmailVerifiedAt,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return models.User{}, ErrEmailExists
-		}
-		return models.User{}, fmt.Errorf("insert user: %w", err)
-	}
-
-	if _, err = tx.Exec(ctx, `
-		INSERT INTO email_verification_tokens (user_id, otp_hash, expires_at)
-		VALUES ($1, $2, $3)
-	`, user.ID, otpHash, expiresAt); err != nil {
-		return models.User{}, fmt.Errorf("insert verification token: %w", err)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return models.User{}, fmt.Errorf("commit registration: %w", err)
-	}
-	return user, nil
 }
 
 func (r *AuthRepository) FindUserByEmail(ctx context.Context, email string) (models.User, error) {
@@ -79,82 +39,6 @@ func (r *AuthRepository) FindUserByEmail(ctx context.Context, email string) (mod
 		return models.User{}, fmt.Errorf("find user by email: %w", err)
 	}
 	return user, nil
-}
-
-func (r *AuthRepository) LatestVerification(ctx context.Context, userID string) (models.VerificationToken, error) {
-	var token models.VerificationToken
-	err := r.db.QueryRow(ctx, `
-		SELECT id::text, user_id::text, otp_hash, expires_at, used_at, attempts, created_at
-		FROM email_verification_tokens
-		WHERE user_id = $1 AND used_at IS NULL
-		ORDER BY created_at DESC LIMIT 1
-	`, userID).Scan(&token.ID, &token.UserID, &token.OTPHash, &token.ExpiresAt, &token.UsedAt, &token.Attempts, &token.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return models.VerificationToken{}, ErrNotFound
-	}
-	if err != nil {
-		return models.VerificationToken{}, fmt.Errorf("find verification token: %w", err)
-	}
-	return token, nil
-}
-
-func (r *AuthRepository) IncrementVerificationAttempts(ctx context.Context, tokenID string) error {
-	result, err := r.db.Exec(ctx, `UPDATE email_verification_tokens SET attempts = attempts + 1 WHERE id = $1`, tokenID)
-	if err != nil {
-		return fmt.Errorf("increment verification attempts: %w", err)
-	}
-	if result.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (r *AuthRepository) MarkEmailVerified(ctx context.Context, userID, tokenID string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin email verification: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	result, err := tx.Exec(ctx, `
-		UPDATE email_verification_tokens SET used_at = NOW()
-		WHERE id = $1 AND user_id = $2 AND used_at IS NULL
-	`, tokenID, userID)
-	if err != nil {
-		return fmt.Errorf("consume verification token: %w", err)
-	}
-	if result.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	if _, err = tx.Exec(ctx, `UPDATE users SET email_verified_at = NOW() WHERE id = $1`, userID); err != nil {
-		return fmt.Errorf("verify user email: %w", err)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit email verification: %w", err)
-	}
-	return nil
-}
-
-func (r *AuthRepository) ReplaceVerification(ctx context.Context, userID, otpHash string, expiresAt time.Time) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin replace verification: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err = tx.Exec(ctx, `
-		UPDATE email_verification_tokens SET used_at = NOW()
-		WHERE user_id = $1 AND used_at IS NULL
-	`, userID); err != nil {
-		return fmt.Errorf("invalidate verification tokens: %w", err)
-	}
-	if _, err = tx.Exec(ctx, `
-		INSERT INTO email_verification_tokens (user_id, otp_hash, expires_at) VALUES ($1, $2, $3)
-	`, userID, otpHash, expiresAt); err != nil {
-		return fmt.Errorf("insert verification token: %w", err)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit replacement verification: %w", err)
-	}
-	return nil
 }
 
 func (r *AuthRepository) CreateRefreshToken(
@@ -290,86 +174,6 @@ func (r *AuthRepository) findUserByLineID(ctx context.Context, lineUserID string
 		return models.User{}, fmt.Errorf("find LINE user: %w", err)
 	}
 	return user, nil
-}
-
-func (r *AuthRepository) UserHasLineIdentity(ctx context.Context, userID string) (bool, error) {
-	var exists bool
-	err := r.db.QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = 'LINE')
-	`, userID).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("check LINE identity: %w", err)
-	}
-	return exists, nil
-}
-
-func (r *AuthRepository) LinkLineIdentity(ctx context.Context, userID, lineUserID string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin LINE identity link: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	var userConnected, lineConnected bool
-	if err = tx.QueryRow(ctx, `
-		SELECT
-		  EXISTS (SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = 'LINE'),
-		  EXISTS (SELECT 1 FROM user_identities WHERE provider = 'LINE' AND provider_user_id = $2)
-	`, userID, lineUserID).Scan(&userConnected, &lineConnected); err != nil {
-		return fmt.Errorf("check LINE identity conflicts: %w", err)
-	}
-	if userConnected {
-		return ErrUserAlreadyHasLine
-	}
-	if lineConnected {
-		return ErrLineAlreadyLinked
-	}
-	if _, err = tx.Exec(ctx, `
-		INSERT INTO user_identities (user_id, provider, provider_user_id) VALUES ($1, 'LINE', $2)
-	`, userID, lineUserID); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			if pgErr.ConstraintName == "user_identities_user_id_provider_key" {
-				return ErrUserAlreadyHasLine
-			}
-			return ErrLineAlreadyLinked
-		}
-		return fmt.Errorf("link LINE identity: %w", err)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit LINE identity link: %w", err)
-	}
-	return nil
-}
-
-func (r *AuthRepository) UnlinkLineIdentity(ctx context.Context, userID string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin LINE identity unlink: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	var passwordHash *string
-	var emailVerifiedAt *time.Time
-	if err = tx.QueryRow(ctx, `
-		SELECT password_hash, email_verified_at FROM users WHERE id = $1 FOR UPDATE
-	`, userID).Scan(&passwordHash, &emailVerifiedAt); errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	} else if err != nil {
-		return fmt.Errorf("find user for LINE unlink: %w", err)
-	}
-	if passwordHash == nil || *passwordHash == "" || emailVerifiedAt == nil {
-		return ErrCannotUnlinkOnlyLogin
-	}
-	result, err := tx.Exec(ctx, `DELETE FROM user_identities WHERE user_id = $1 AND provider = 'LINE'`, userID)
-	if err != nil {
-		return fmt.Errorf("unlink LINE identity: %w", err)
-	}
-	if result.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit LINE identity unlink: %w", err)
-	}
-	return nil
 }
 
 func isUniqueViolation(err error) bool {

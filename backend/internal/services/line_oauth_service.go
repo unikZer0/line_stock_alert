@@ -11,21 +11,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"stock_linebot/backend/internal/models"
-	"stock_linebot/backend/internal/repositories"
 )
 
 const lineAuthorizationURL = "https://access.line.me/oauth2/v2.1/authorize"
 
 type LineUserStore interface {
 	FindOrCreateLineUser(context.Context, string, string) (models.User, error)
-	UserHasLineIdentity(context.Context, string) (bool, error)
-	LinkLineIdentity(context.Context, string, string) error
-	UnlinkLineIdentity(context.Context, string) error
 }
 
 type LineOAuthConfig struct {
-	ChannelID, CallbackURL, LinkCallbackURL, StateSecret, Issuer string
-	StateTTL                                                     time.Duration
+	ChannelID, CallbackURL, StateSecret, Issuer string
+	StateTTL                                    time.Duration
 }
 
 type LineOAuthService struct {
@@ -39,7 +35,6 @@ type LineOAuthService struct {
 type lineStateClaims struct {
 	Purpose string `json:"purpose"`
 	Nonce   string `json:"nonce"`
-	UserID  string `json:"user_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -48,28 +43,17 @@ func NewLineOAuthService(store LineUserStore, provider LineProvider, auth *AuthS
 }
 
 func (s *LineOAuthService) AuthorizationURL() (string, error) {
-	return s.authorizationURL("LINE_LOGIN", "", s.cfg.CallbackURL)
+	return s.authorizationURL()
 }
 
-func (s *LineOAuthService) ConnectAuthorizationURL(ctx context.Context, userID string) (string, error) {
-	connected, err := s.store.UserHasLineIdentity(ctx, userID)
-	if err != nil {
-		return "", newError("INTERNAL_SERVER_ERROR", "Unable to start LINE account linking.", err)
-	}
-	if connected {
-		return "", newError("USER_ALREADY_HAS_LINE", "This account is already connected to LINE.", nil)
-	}
-	return s.authorizationURL("LINE_LINK", userID, s.cfg.LinkCallbackURL)
-}
-
-func (s *LineOAuthService) authorizationURL(purpose, userID, callbackURL string) (string, error) {
+func (s *LineOAuthService) authorizationURL() (string, error) {
 	nonce, err := randomToken()
 	if err != nil {
 		return "", newError("INTERNAL_SERVER_ERROR", "Unable to start LINE login.", err)
 	}
 	now := s.now()
 	claims := lineStateClaims{
-		Purpose: purpose, Nonce: nonce, UserID: userID,
+		Purpose: "LINE_LOGIN", Nonce: nonce,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer: s.cfg.Issuer, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.StateTTL)),
 		},
@@ -79,7 +63,7 @@ func (s *LineOAuthService) authorizationURL(purpose, userID, callbackURL string)
 		return "", newError("INTERNAL_SERVER_ERROR", "Unable to start LINE login.", err)
 	}
 	params := url.Values{
-		"response_type": {"code"}, "client_id": {s.cfg.ChannelID}, "redirect_uri": {callbackURL},
+		"response_type": {"code"}, "client_id": {s.cfg.ChannelID}, "redirect_uri": {s.cfg.CallbackURL},
 		"state": {state}, "scope": {"openid profile"}, "nonce": {nonce},
 	}
 	return lineAuthorizationURL + "?" + params.Encode(), nil
@@ -106,45 +90,6 @@ func (s *LineOAuthService) Login(ctx context.Context, code, rawState, ip, userAg
 		return models.TokenResponse{}, fmt.Errorf("issue LINE login tokens: %w", err)
 	}
 	return result, nil
-}
-
-func (s *LineOAuthService) Link(ctx context.Context, code, rawState string) error {
-	if code == "" {
-		return newError("INVALID_OAUTH_CODE", "The LINE authorization code is invalid.", nil)
-	}
-	claims, err := s.parseState(rawState, "LINE_LINK")
-	if err != nil || claims.UserID == "" {
-		return newError("INVALID_OAUTH_STATE", "The OAuth state is invalid or expired.", err)
-	}
-	identity, err := s.provider.ExchangeAndVerify(ctx, code, claims.Nonce, s.cfg.LinkCallbackURL)
-	if err != nil {
-		return lineProviderError(err)
-	}
-	if err = s.store.LinkLineIdentity(ctx, claims.UserID, identity.UserID); err != nil {
-		switch {
-		case errors.Is(err, repositories.ErrUserAlreadyHasLine):
-			return newError("USER_ALREADY_HAS_LINE", "This account is already connected to LINE.", err)
-		case errors.Is(err, repositories.ErrLineAlreadyLinked):
-			return newError("LINE_ALREADY_LINKED", "This LINE account belongs to another user.", err)
-		default:
-			return newError("INTERNAL_SERVER_ERROR", "Unable to connect the LINE account.", err)
-		}
-	}
-	return nil
-}
-
-func (s *LineOAuthService) Unlink(ctx context.Context, userID string) error {
-	err := s.store.UnlinkLineIdentity(ctx, userID)
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, repositories.ErrCannotUnlinkOnlyLogin):
-		return newError("CANNOT_UNLINK_ONLY_LOGIN_METHOD", "Add and verify an email login before disconnecting LINE.", err)
-	case errors.Is(err, repositories.ErrNotFound):
-		return newError("LINE_USER_NOT_FOUND", "No LINE account is connected.", err)
-	default:
-		return newError("INTERNAL_SERVER_ERROR", "Unable to disconnect the LINE account.", err)
-	}
 }
 
 func (s *LineOAuthService) parseState(rawState, purpose string) (*lineStateClaims, error) {

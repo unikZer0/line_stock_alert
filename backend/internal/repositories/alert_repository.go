@@ -14,6 +14,8 @@ import (
 var (
 	ErrAlertAlreadyExists = errors.New("active alert already exists")
 	ErrAlertNotFound      = errors.New("alert not found")
+	ErrAlertNotTriggered  = errors.New("alert is not triggered")
+	ErrStockDisabled      = errors.New("stock is administratively disabled")
 )
 
 type AlertRepository struct{ db *pgxpool.Pool }
@@ -53,6 +55,24 @@ func (r *AlertRepository) CountActive(ctx context.Context, userID string) (int, 
 		return 0, fmt.Errorf("count active alerts: %w", err)
 	}
 	return count, nil
+}
+
+func (r *AlertRepository) Get(ctx context.Context, userID, alertID string) (models.Alert, error) {
+	var alert models.Alert
+	err := r.db.QueryRow(ctx, `
+		SELECT a.id::text, s.symbol, a.condition, a.target_price, a.status,
+		       a.triggered_at, a.disabled_reason, a.created_at, a.updated_at
+		FROM alerts a JOIN stocks s ON s.id = a.stock_id
+		WHERE a.id::text = $1 AND a.user_id = $2
+	`, alertID, userID).Scan(&alert.ID, &alert.Symbol, &alert.Condition, &alert.TargetPrice,
+		&alert.Status, &alert.TriggeredAt, &alert.DisabledReason, &alert.CreatedAt, &alert.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Alert{}, ErrAlertNotFound
+	}
+	if err != nil {
+		return models.Alert{}, fmt.Errorf("get alert: %w", err)
+	}
+	return alert, nil
 }
 
 func (r *AlertRepository) Create(ctx context.Context, userID string, stock models.StockMetadata, condition string, targetPrice float64) (models.Alert, error) {
@@ -124,6 +144,29 @@ func (r *AlertRepository) Delete(ctx context.Context, userID, alertID string) er
 		return ErrAlertNotFound
 	}
 	return nil
+}
+
+func (r *AlertRepository) Rearm(ctx context.Context, userID, alertID string) (models.Alert, error) {
+	var alert models.Alert
+	err := r.db.QueryRow(ctx, `
+		UPDATE alerts a
+		SET status = 'ACTIVE', triggered_at = NULL, disabled_reason = NULL, disabled_at = NULL
+		FROM stocks s
+		WHERE a.id::text = $1 AND a.user_id = $2 AND a.status = 'TRIGGERED' AND a.stock_id = s.id
+		RETURNING a.id::text, s.symbol, a.condition, a.target_price, a.status,
+		          a.triggered_at, a.disabled_reason, a.created_at, a.updated_at
+	`, alertID, userID).Scan(&alert.ID, &alert.Symbol, &alert.Condition, &alert.TargetPrice,
+		&alert.Status, &alert.TriggeredAt, &alert.DisabledReason, &alert.CreatedAt, &alert.UpdatedAt)
+	if isAlertUniqueViolation(err) {
+		return models.Alert{}, ErrAlertAlreadyExists
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Alert{}, ErrAlertNotTriggered
+	}
+	if err != nil {
+		return models.Alert{}, fmt.Errorf("re-arm alert: %w", err)
+	}
+	return alert, nil
 }
 
 func isAlertUniqueViolation(err error) bool {

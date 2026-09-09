@@ -68,7 +68,7 @@ func (s *LineWebhookService) processEvent(ctx context.Context, event models.Line
 	}
 	_, status, err := s.store.FindUserByLineID(ctx, event.Source.UserID)
 	if errors.Is(err, repositories.ErrNotFound) {
-		return s.messenger.ReplyText(ctx, event.ReplyToken, "Please register first. If you already have an account, log in and connect LINE: "+s.frontendURL)
+		return s.messenger.ReplyText(ctx, event.ReplyToken, "Welcome to Stock Alert. Open Stocks from the rich menu to continue with LINE Login: "+s.frontendURL+"/stocks")
 	}
 	if err != nil {
 		return fmt.Errorf("look up LINE account: %w", err)
@@ -76,9 +76,9 @@ func (s *LineWebhookService) processEvent(ctx context.Context, event models.Line
 	if status != "ACTIVE" {
 		return s.messenger.ReplyText(ctx, event.ReplyToken, "Your Stock Alert account is currently disabled.")
 	}
-	message := "Your LINE account is connected to Stock Alert. Use the website to manage your watchlist and price alerts: " + s.frontendURL
+	message := "Open Stocks or My Alerts from the rich menu. Stocks: " + s.frontendURL + "/stocks\nMy Alerts: " + s.frontendURL + "/alerts"
 	if event.Type == "message" && strings.EqualFold(strings.TrimSpace(event.Message.Text), "HELP") {
-		message = "Stock Alert commands are managed on the website. Open your watchlist or create ABOVE/BELOW alerts here: " + s.frontendURL
+		message = "Use Stocks to view US quotes and create ABOVE/BELOW alerts. Use My Alerts to edit or delete them.\nStocks: " + s.frontendURL + "/stocks\nMy Alerts: " + s.frontendURL + "/alerts"
 	}
 	return s.messenger.ReplyText(ctx, event.ReplyToken, message)
 }
