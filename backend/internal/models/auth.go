@@ -2,27 +2,6 @@ package models
 
 import "time"
 
-type RegisterRequest struct {
-	Email           string `json:"email"`
-	Password        string `json:"password"`
-	ConfirmPassword string `json:"confirm_password"`
-}
-
-type RegisterResponse struct {
-	UserID               string `json:"user_id"`
-	Email                string `json:"email"`
-	VerificationRequired bool   `json:"verification_required"`
-}
-
-type VerifyEmailRequest struct {
-	Email string `json:"email"`
-	OTP   string `json:"otp"`
-}
-
-type ResendOTPRequest struct {
-	Email string `json:"email"`
-}
-
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -46,16 +25,6 @@ type User struct {
 	Role            string
 	Status          string
 	EmailVerifiedAt *time.Time
-}
-
-type VerificationToken struct {
-	ID        string
-	UserID    string
-	OTPHash   string
-	ExpiresAt time.Time
-	UsedAt    *time.Time
-	Attempts  int
-	CreatedAt time.Time
 }
 
 type RefreshToken struct {
