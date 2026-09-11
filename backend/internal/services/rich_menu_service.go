@@ -65,9 +65,8 @@ func (s *RichMenuService) Publish(ctx context.Context, action models.AdminAction
 
 func (s *RichMenuService) create(ctx context.Context) (string, error) {
 	payload := map[string]any{"size": map[string]int{"width": 2500, "height": 843}, "selected": true, "name": "Alert Bot Main Menu", "chatBarText": "Alert Bot Menu", "areas": []any{
-		map[string]any{"bounds": map[string]int{"x": 0, "y": 0, "width": 834, "height": 843}, "action": map[string]string{"type": "uri", "label": "Market", "uri": s.frontendURL + "/stocks"}},
-		map[string]any{"bounds": map[string]int{"x": 834, "y": 0, "width": 833, "height": 843}, "action": map[string]string{"type": "uri", "label": "My Alerts", "uri": s.frontendURL + "/alerts"}},
-		map[string]any{"bounds": map[string]int{"x": 1667, "y": 0, "width": 833, "height": 843}, "action": map[string]string{"type": "message", "label": "Help", "text": "HELP"}},
+		map[string]any{"bounds": map[string]int{"x": 0, "y": 0, "width": 1250, "height": 843}, "action": map[string]string{"type": "uri", "label": "Market", "uri": s.frontendURL + "/stocks"}},
+		map[string]any{"bounds": map[string]int{"x": 1250, "y": 0, "width": 1250, "height": 843}, "action": map[string]string{"type": "uri", "label": "My Alerts", "uri": s.frontendURL + "/alerts"}},
 	}}
 	body, _ := json.Marshal(payload)
 	response, err := s.request(ctx, http.MethodPost, s.apiBase+"/v2/bot/richmenu", "application/json", body)
