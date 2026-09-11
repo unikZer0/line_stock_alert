@@ -3,11 +3,11 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-stock_alert}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-stockalert_db}
+      POSTGRES_USER: ${POSTGRES_USER:-stock_alert}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stockpass}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -21,7 +21,7 @@ services:
     image: redis:8-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,10 +41,10 @@ services:
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8080
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-stock_alert}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-stock_alert}:${POSTGRES_PASSWORD:-stockpass}@postgres:5432/${POSTGRES_DB:-stockalert_db}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "${API_PORT:-8081}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,7 +62,7 @@ services:
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
     ports:
-      - "${FRONTEND_PORT:-3000}:5173"
+      - "${FRONTEND_PORT:-3001}:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules

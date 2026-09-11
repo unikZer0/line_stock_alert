@@ -2,3 +2,5 @@
 stock-alert-api-final.md
 node_modules/
 backend/.gocache
+.env.deployment
+.nginx
